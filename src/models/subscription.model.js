@@ -8,7 +8,7 @@ const subscriptionSchema = new Schema(
     },
 
     channel: {
-      type: Schema.Types.ObjectId, //one to whom is subscriber is subscribing
+      type: Schema.Types.ObjectId, //User Channel gets subscribed to
       ref: "User",
     },
   },
