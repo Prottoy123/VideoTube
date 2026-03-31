@@ -10,8 +10,55 @@ import {
 } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
-  //TODO: get all videos based on query, sort, pagination
+  const {
+    page = 1,
+    limit = 10,
+    query,
+    sortBy = "createdAt",
+    sortType = "desc",
+    userId,
+  } = req.query;
+
+  const pageNumber = parseInt(page);
+  const limitNumber = parseInt(limit);
+  const skipValue = (pageNumber - 1) * limitNumber;
+
+  const sortOptions = {};
+  sortOptions[sortBy] = sortType === "desc" ? -1 : 1;
+
+  const pipeline = [
+    {
+      $match: {
+        isPublished: true,
+        ...(query && { title: { $regex: query, $options: "i" } }),
+      },
+    },
+    {
+      $sort: sortOptions, 
+    },
+    {
+      $skip: skipValue, 
+    },
+    {
+      $limit: limitNumber,
+    },
+    {
+      $project: {
+        title: 1,
+        description: 1,
+        thumbnail: 1,
+        videoFile: 1,
+        views: 1,
+        owner: 1,
+      },
+    },
+  ];
+
+  const ShowVideo = await Video.aggregate(pipeline);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, ShowVideo, "Videos fetched successfully"));
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
@@ -52,9 +99,20 @@ const getVideoById = asyncHandler(async (req, res) => {
   }
 
   const getVideo = await Video.findById(videoId);
-  if (!getVideo) {
+  if (!getVideo ) {
     throw new ApiError(404, "video not found in the database");
   }
+
+  if (
+    !getVideo.isPublished &&
+    getVideo.owner.toString() !== req.user?._id.toString()
+  ) {
+    throw new ApiError(
+      403,
+      "This video is private and only accessible by the owner"
+    );
+  }
+  
   return res
     .status(200)
     .json(new ApiResponse(200, getVideo, "video Found Successfully"));
@@ -127,7 +185,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
   }
 
   //Owner Check
-  if (deleteVideo.owner.toString() === req.user._id.toString()) {
+  if (deleteVideo.owner.toString() !== req.user._id.toString()) {
     throw new ApiError(401, "Validation Failed");
   }
 
@@ -151,6 +209,33 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+if (!videoId) {
+  throw new ApiError(400,"VideoId required")
+}
+
+const foundVideo = await Video.findById(videoId);
+
+if (foundVideo.video.toString() !== req.user?._id.toString()) {
+  throw new ApiError(400, "unable to to validate");
+}
+
+const toggleStatus = await findByIdAndUpdate(
+  videoId,
+  {
+    $set: {
+      isPublished: !foundVideo.isPublished, // just change the value of the toggle
+    },
+  },
+  {
+    new: true,
+  }
+);
+
+return res
+.status(200)
+.json(new ApiResponse(200,toggleStatus,"Status Changed"))
+
+
 });
 
 export {
