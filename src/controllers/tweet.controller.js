@@ -27,26 +27,19 @@ const createTweet = asyncHandler(async (req, res) => {
 });
 
 const getUserTweets = asyncHandler(async (req, res) => {
-  // TODO: get user tweets
   const userId = req.params.userId;
 
   if (!isValidObjectId(userId)) {
     throw new ApiError(400, "Invalid User ID");
   }
 
-  const UserTweet = await Tweet.find({ owner: userId }).populate(
+  const userTweets = await Tweet.find({ owner: userId }).populate(
     "owner",
     "name email"
   );
-
-  if (!UserTweet) {
-    throw new ApiError(404, "No tweets found for this user");
-  }
   return res
     .status(200)
-    .json(
-      new ApiResponse(200, UserTweet, "User Tweets Retrieved Successfully")
-    );
+    .json(new ApiResponse(200, userTweets, "User tweets fetched successfully"));
 });
 
 const updateTweet = asyncHandler(async (req, res) => {
