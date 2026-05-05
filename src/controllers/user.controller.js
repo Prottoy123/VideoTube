@@ -190,45 +190,56 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     req.cookies.refreshToken || req.body.refreshToken;
 
   if (!incomingRefreshToken) {
-    throw new ApiError(401, "unauthorized request");
+    throw new ApiError(401, "Unauthorized request: No token provided");
   }
 
   try {
+    // ১. টোকেন ভেরিফাই করা হচ্ছে
     const decodedToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
 
+    // ২. ডেটাবেসে ইউজার খুঁজছি
     const user = await User.findById(decodedToken?._id);
-
     if (!user) {
-      throw new ApiError(401, "Invalid refresh Token");
+      throw new ApiError(401, "Invalid Refresh Token: User not found");
     }
 
+    // ৩. টোকেন ম্যাচিং (Fix: সঠিক এরর মেসেজ দেওয়া হলো)
     if (incomingRefreshToken !== user?.refreshToken) {
-      throw new ApiError(401, "refresh token is expired");
+      throw new ApiError(401, "Refresh token is invalid or compromised");
     }
 
+    // ৪. নতুন টোকেন জেনারেট
     const { accessToken, newRefreshToken } =
       await generateAccessAndRefreshTokens(user._id);
 
     const options = {
       httpOnly: true,
-      secure: true,
+      secure: true, // প্রোডাকশনে (HTTPS) এটি true থাকবে
     };
+
+    // ৫. সিকিউর রেসপন্স (Fix: Naming convention এবং JSON Response ডাটা ফিক্স করা হলো)
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
-      .cookie("RefreshToken", newRefreshToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
       .json(
         new ApiResponse(
           200,
-          { accessToken: newRefreshToken },
-          "Access Token Refreshed"
+          {
+            accessToken: accessToken, // Fix: সঠিক ভেরিয়েবল পাস করা হলো
+            refreshToken: newRefreshToken,
+          },
+          "Access Token successfully refreshed"
         )
       );
   } catch (error) {
-    throw new ApiError(401, error?.message || "invalid Refresh Token");
+    throw new ApiError(
+      401,
+      error?.message || "Invalid or Expired Refresh Token"
+    );
   }
 });
 
